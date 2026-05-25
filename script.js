@@ -19,6 +19,7 @@ const autoRotateSlider = document.getElementById('autoRotateSlider');
 const autoRotateValueEl = document.getElementById('autoRotateValue');
 const pointMemoryEl = document.getElementById('pointMemory');
 const zoomValueEl = document.getElementById('zoomValue');
+const paletteSelect = document.getElementById('paletteSelect');
 const colorModeSelect = document.getElementById('colorModeSelect');
 
 const anchorSelects = [
@@ -51,7 +52,7 @@ const pitchLfoDepthEl = document.getElementById('pitchLfoDepth');
 const requiredElements = [
     homeView, gameView, enterBtn, navBackBtn, navHelpBtn, navSettingsBtn,
     helpModal, closeHelpBtn, sidebar, canvas, speedSlider, speedValue,
-    autoRotateSlider, autoRotateValueEl, pointMemoryEl,
+    autoRotateSlider, autoRotateValueEl, pointMemoryEl, paletteSelect,
     zoomValueEl, colorModeSelect, randomToggle, randomInterval, iterCountEl,
     currentNoteEl, resetViewBtn, zoomInBtn, zoomOutBtn, selectionBox,
     masterVolumeEl, delayTimeEl, delayFeedbackEl, delayMixEl, reverbSizeEl,
@@ -66,6 +67,16 @@ if (requiredElements.some(element => !element)) {
 const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 const DEFAULT_ANCHOR_NOTES = ['C4', 'Ab3', 'E4'];
 const ANCHOR_COLORS = ['#ff5555', '#aa55ff', '#55ffaa'];
+
+function applyPalette(index) {
+    const palette = COLOR_PALETTES[index];
+    if (!palette) return;
+    palette.colors.forEach((c, i) => {
+        ANCHOR_COLORS[i] = c;
+        if (anchors[i]) anchors[i].color = c;
+    });
+    redrawCanvas();
+}
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 100;
@@ -1046,6 +1057,13 @@ function setDefaultAnchorNotes() {
 
 function populateDropdowns() {
     if (!dropdownsInitialized) {
+        paletteSelect.innerHTML = COLOR_PALETTES
+            .map((p, i) => `<option value="${i}">${p.name}</option>`)
+            .join('');
+        paletteSelect.addEventListener('change', e => {
+            applyPalette(Number.parseInt(e.target.value, 10));
+        });
+
         const optionsHtml = NOTES
             .map((note, index) => `<option value="${index}">${note.name}</option>`)
             .join('');
