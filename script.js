@@ -16,15 +16,15 @@ const ctx = canvas.getContext('2d');
 const speedSlider = document.getElementById('speedSlider');
 const autoRotateSlider = document.getElementById('autoRotateSlider');
 const pointMemoryEl = document.getElementById('pointMemory');
+const chaosRatioEl = document.getElementById('chaosRatio');
+const pointSizeEl = document.getElementById('pointSize');
 const zoomValueEl = document.getElementById('zoomValue');
 const paletteSelect = document.getElementById('paletteSelect');
 const colorModeSelect = document.getElementById('colorModeSelect');
 
-const anchorSelects = [
-    document.getElementById('anchor1Select'),
-    document.getElementById('anchor2Select'),
-    document.getElementById('anchor3Select')
-];
+let anchorSelects = [];
+const presetSelect = document.getElementById('presetSelect');
+const anchorsContainer = document.getElementById('anchorsContainer');
 
 const randomToggle = document.getElementById('randomToggle');
 const randomColorToggle = document.getElementById('randomColorToggle');
@@ -55,7 +55,8 @@ const requiredElements = [
     zoomValueEl, colorModeSelect, randomToggle, randomInterval, iterCountEl,
     currentNoteEl, resetViewBtn, zoomInBtn, zoomOutBtn, selectionBox,
     masterVolumeEl, delayTimeEl, delayFeedbackEl, delayMixEl, reverbSizeEl,
-    reverbMixEl, pitchLfoRateEl, pitchLfoDepthEl, ...anchorSelects
+    reverbMixEl, pitchLfoRateEl, pitchLfoDepthEl, presetSelect, anchorsContainer,
+    pointSizeEl
 ];
 
 if (requiredElements.some(element => !element)) {
@@ -64,16 +65,26 @@ if (requiredElements.some(element => !element)) {
 
 // --- Constants ---
 const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-const DEFAULT_ANCHOR_NOTES = ['C4', 'Ab3', 'E4'];
-const ANCHOR_COLORS = ['#ff5555', '#aa55ff', '#55ffaa'];
+const DEFAULT_ANCHOR_NOTES = ['C4', 'Ab3', 'E4', 'G4', 'Eb4', 'B3'];
+const ANCHOR_COLORS = ['#ff5555', '#aa55ff', '#55ffaa', '#ffaa55', '#55aaff', '#ff55aa', '#aaff55', '#ffffff'];
+
+const FRACTAL_PRESETS = [
+    { id: 'custom',     name: 'Custom',          count: null, ratio: null  },
+    { id: 'sierpinski', name: 'Sierpiński △  ×3', count: 3,    ratio: 0.5  },
+    { id: 'square',     name: 'Square ×4',        count: 4,    ratio: 0.33 },
+    { id: 'pentaflake', name: 'Pentaflake ×5',    count: 5,    ratio: 0.38 },
+    { id: 'hexaflake',  name: 'Hexaflake ×6',     count: 6,    ratio: 0.33 },
+];
 
 function applyPalette(index) {
     const palette = COLOR_PALETTES[index];
     if (!palette) return;
-    palette.colors.forEach((c, i) => {
-        ANCHOR_COLORS[i] = c;
-        if (anchors[i]) anchors[i].color = c;
-    });
+    const n = anchors.length || anchorCount;
+    for (let i = 0; i < n; i++) {
+        const color = palette.colors[i % palette.colors.length];
+        ANCHOR_COLORS[i] = color;
+        if (anchors[i]) anchors[i].color = color;
+    }
     redrawCanvas();
 }
 
@@ -437,6 +448,7 @@ let transform = { scale: 1, offsetX: 0, offsetY: 0 };
 let pointsBuffer = [];
 
 let anchors = [];
+let anchorCount = 3;
 let currentX = 0;
 let currentY = 0;
 let iteration = 0;
@@ -462,21 +474,20 @@ let lastPlayedColor = '#ffffff';
 let lastPlayedAnchorAngle = null;
 
 function setupAnchors() {
+    const n = anchors.length || anchorCount;
     const cx = width / 2;
     const cy = height / 2;
     const radius = Math.min(cx, cy) * 0.8;
-    const baseAngles = [
-        -Math.PI / 2,
-        -Math.PI / 2 + (Math.PI * 2 / 3) * 2,
-        -Math.PI / 2 + (Math.PI * 2 / 3)
-    ];
 
-    anchors = baseAngles.map((angle, index) => ({
-        x: cx + Math.cos(angle + anchorRotationOffset) * radius,
-        y: cy + Math.sin(angle + anchorRotationOffset) * radius,
-        color: ANCHOR_COLORS[index],
-        noteIndex: anchors[index] ? anchors[index].noteIndex : 0
-    }));
+    anchors = Array.from({ length: n }, (_, i) => {
+        const angle = -Math.PI / 2 + (Math.PI * 2 / n) * i + anchorRotationOffset;
+        return {
+            x: cx + Math.cos(angle) * radius,
+            y: cy + Math.sin(angle) * radius,
+            color: ANCHOR_COLORS[i] || ANCHOR_COLORS[i % ANCHOR_COLORS.length],
+            noteIndex: anchors[i] ? anchors[i].noteIndex : 0
+        };
+    });
 }
 
 function updateZoomDisplay() {
@@ -817,8 +828,9 @@ function redrawCanvas() {
     });
 
     if (activeAnchor) {
-        const midX = (currentX + activeAnchor.x) / 2;
-        const midY = (currentY + activeAnchor.y) / 2;
+        const ratio = readNumber(chaosRatioEl, 0.5, 0.01, 0.99);
+        const midX = currentX + (activeAnchor.x - currentX) * ratio;
+        const midY = currentY + (activeAnchor.y - currentY) * ratio;
 
         ctx.beginPath();
         ctx.moveTo(currentX, currentY);
@@ -840,7 +852,7 @@ function redrawCanvas() {
         ctx.fill();
     }
 
-    const size = 1.5 / transform.scale;
+    const size = readNumber(pointSizeEl, 1, 1, 20) / transform.scale;
     const colorPaths = {};
 
     for (let i = 0; i < pointsBuffer.length; i++) {
@@ -930,15 +942,16 @@ function addFractalPoint(color, timestamp) {
 }
 
 function prepareActiveStep() {
-    const r = Math.floor(Math.random() * 3);
+    const r = Math.floor(Math.random() * anchors.length);
     activeAnchor = anchors[r];
     activeNote = NOTES[activeAnchor.noteIndex] || NOTES[0];
     activeColor = getPointColor(activeAnchor, activeNote);
 }
 
 function commitActiveStep(timestamp) {
-    currentX = (currentX + activeAnchor.x) / 2;
-    currentY = (currentY + activeAnchor.y) / 2;
+    const ratio = readNumber(chaosRatioEl, 0.5, 0.01, 0.99);
+    currentX = currentX + (activeAnchor.x - currentX) * ratio;
+    currentY = currentY + (activeAnchor.y - currentY) * ratio;
 
     addFractalPoint(activeColor, timestamp);
     lastPlayedColor = activeAnchor.color;
@@ -967,7 +980,7 @@ function iterate(timestamp) {
     const rate = readNumber(speedSlider, 5, 0, 300);
     let needsRedraw = trimPointBuffer(frameTime);
 
-    if (rate > 0 && anchors.length === 3) {
+    if (rate > 0 && anchors.length > 0) {
         if (rate <= PROCESS_RATE_MAX) {
             slowState = 1;
             if (!activeAnchor) prepareActiveStep();
@@ -1008,13 +1021,14 @@ function iterate(timestamp) {
             let lastColor = '#ffffff';
 
             for (let k = 0; k < pointsToDraw; k++) {
-                const r = Math.floor(Math.random() * 3);
+                const r = Math.floor(Math.random() * anchors.length);
                 const anchor = anchors[r];
                 const note = NOTES[anchor.noteIndex] || NOTES[0];
                 const color = getPointColor(anchor, note);
 
-                currentX = (currentX + anchor.x) / 2;
-                currentY = (currentY + anchor.y) / 2;
+                const ratio = readNumber(chaosRatioEl, 0.5, 0.01, 0.99);
+                currentX = currentX + (anchor.x - currentX) * ratio;
+                currentY = currentY + (anchor.y - currentY) * ratio;
 
                 addFractalPoint(color, frameTime);
                 notesThisFrame.set(anchor.noteIndex, { note, color });
@@ -1054,12 +1068,78 @@ function iterate(timestamp) {
 }
 
 // --- Setup UI ---
+function buildAnchorSelects(n) {
+    anchorsContainer.innerHTML = '';
+    anchorSelects = [];
+    const optionsHtml = NOTES.map((note, i) => `<option value="${i}">${note.name}</option>`).join('');
+
+    for (let i = 0; i < n; i++) {
+        const label = document.createElement('label');
+        label.textContent = `Anchor ${i + 1}`;
+        label.htmlFor = `anchorSelect${i}`;
+
+        const select = document.createElement('select');
+        select.id = `anchorSelect${i}`;
+        select.innerHTML = optionsHtml;
+        select.value = String(anchors[i] ? anchors[i].noteIndex : 0);
+
+        const idx = i;
+        select.addEventListener('change', e => {
+            if (anchors[idx]) {
+                anchors[idx].noteIndex = Number.parseInt(e.target.value, 10) || 0;
+                redrawCanvas();
+            }
+        });
+
+        anchorsContainer.appendChild(label);
+        anchorsContainer.appendChild(select);
+        anchorSelects.push(select);
+    }
+}
+
+function setAnchorCount(n) {
+    anchorCount = n;
+    const prevNoteIndices = anchors.map(a => a.noteIndex);
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.min(cx, cy) * 0.8;
+
+    anchors = Array.from({ length: n }, (_, i) => ({
+        x: cx + Math.cos(-Math.PI / 2 + (Math.PI * 2 / n) * i + anchorRotationOffset) * radius,
+        y: cy + Math.sin(-Math.PI / 2 + (Math.PI * 2 / n) * i + anchorRotationOffset) * radius,
+        color: ANCHOR_COLORS[i] || ANCHOR_COLORS[i % ANCHOR_COLORS.length],
+        noteIndex: i < prevNoteIndices.length ? prevNoteIndices[i] : 0
+    }));
+
+    buildAnchorSelects(n);
+    setDefaultAnchorNotes();
+    resetFractalState();
+    redrawCanvas();
+}
+
+function applyPreset(id) {
+    const preset = FRACTAL_PRESETS.find(p => p.id === id);
+    if (!preset || preset.id === 'custom') return;
+
+    if (preset.ratio !== null) {
+        chaosRatioEl.value = String(preset.ratio);
+    }
+
+    if (preset.count !== null && preset.count !== anchorCount) {
+        setAnchorCount(preset.count);
+    } else {
+        resetFractalState();
+        redrawCanvas();
+    }
+}
+
 function setDefaultAnchorNotes() {
-    DEFAULT_ANCHOR_NOTES.forEach((name, index) => {
+    anchorSelects.forEach((select, index) => {
+        const name = DEFAULT_ANCHOR_NOTES[index] || DEFAULT_ANCHOR_NOTES[0];
         const noteIndex = NOTES.findIndex(note => note.name === name);
         const safeIndex = noteIndex >= 0 ? noteIndex : 0;
-        anchors[index].noteIndex = safeIndex;
-        anchorSelects[index].value = String(safeIndex);
+        if (anchors[index]) anchors[index].noteIndex = safeIndex;
+        select.value = String(safeIndex);
     });
 }
 
@@ -1072,28 +1152,25 @@ function populateDropdowns() {
             applyPalette(Number.parseInt(e.target.value, 10));
         });
 
-        const optionsHtml = NOTES
-            .map((note, index) => `<option value="${index}">${note.name}</option>`)
+        presetSelect.innerHTML = FRACTAL_PRESETS
+            .map(p => `<option value="${p.id}">${p.name}</option>`)
             .join('');
-
-        anchorSelects.forEach((select, index) => {
-            select.innerHTML = optionsHtml;
-            select.addEventListener('change', e => {
-                anchors[index].noteIndex = Number.parseInt(e.target.value, 10) || 0;
-                redrawCanvas();
-            });
+        presetSelect.value = 'sierpinski';
+        presetSelect.addEventListener('change', e => {
+            applyPreset(e.target.value);
         });
 
         dropdownsInitialized = true;
     }
 
+    buildAnchorSelects(anchorCount);
     setDefaultAnchorNotes();
 }
 
 function randomizeNotes() {
-    anchorSelects.forEach((select, index) => {
+    anchorSelects.forEach((select, i) => {
         const r = Math.floor(Math.random() * NOTES.length);
-        anchors[index].noteIndex = r;
+        if (anchors[i]) anchors[i].noteIndex = r;
         select.value = String(r);
     });
     redrawCanvas();

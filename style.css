@@ -215,13 +215,13 @@ input[type="range"] {
 
 .motion-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 4px 6px;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
     align-items: center;
 }
 
 .motion-grid label {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     color: #cccccc;
     text-align: center;
 }
@@ -230,7 +230,7 @@ input[type="range"] {
     width: 100%;
     box-sizing: border-box;
     text-align: center;
-    padding: 4px 2px;
+    padding: 5px 4px;
 }
 
 .checkbox-label {
