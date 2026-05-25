@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal Synth - Pyramid</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- PANTALLA DE INICIO -->
+    <div id="home-view">
+        <button id="enterPyramidBtn" class="pyramid-btn">
+            <svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <!-- Pirámide cruda -->
+                <polygon points="50,10 10,90 90,90" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="miter" />
+                <!-- Líneas internas -->
+                <line x1="50" y1="10" x2="50" y2="90" stroke="#ffffff" stroke-width="1" />
+                <line x1="30" y1="50" x2="70" y2="50" stroke="#ffffff" stroke-width="1" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- PANTALLA DE JUEGO -->
+    <div id="game-view" style="display: none;">
+        
+        <!-- BARRA SUPERIOR / FLOTANTE -->
+        <div id="top-bar">
+            <button id="navBackBtn" title="Back to Menu">[ < ]</button>
+            <button id="navHelpBtn" title="Help">[ ? ]</button>
+            <button id="navSettingsBtn" title="Toggle Settings">[ ⚙ ]</button>
+        </div>
+
+        <!-- MODAL DE AYUDA -->
+        <div id="help-modal" style="display: none;">
+            <div class="modal-content">
+                <h2>--- SYSTEM MANUAL ---</h2>
+                <p><strong>SPEED:</strong> Controla el algoritmo matemático. Valores de 1-50 generan el dibujo paso a paso. Valores mayores a 50 inyectan múltiples puntos por fotograma para construir el fractal.</p>
+                <p><strong>ZOOM:</strong> Usa la rueda del ratón o los botones [+]/[-]. El nivel de Zoom afecta la Frecuencia de Corte del audio (más cerca = frecuencias más altas).</p>
+                <p><strong>BOX ZOOM:</strong> Mantén presionada la tecla SHIFT y arrastra sobre el lienzo para acercarte a un sector específico del fractal.</p>
+                <p><strong>PROYECCIÓN:</strong> Presiona el botón [ ⚙ ] para ocultar/mostrar la barra lateral y proyectar a pantalla completa.</p>
+                <button id="closeHelpBtn">[ CLOSE ]</button>
+            </div>
+        </div>
+        
+        <!-- SIDEBAR DE AJUSTES -->
+        <aside id="sidebar">
+            <h2>Pyramid Settings</h2>
+            
+            <div class="control-group">
+                <label>Speed (0=Pause, 50=Step, 100=Max)</label>
+                <input type="range" id="speedSlider" min="0" max="100" value="10">
+                <span id="speedValue">10</span>
+            </div>
+
+            <div class="control-group">
+                <label>Zoom Level</label>
+                <span id="zoomValue">1.0x</span>
+            </div>
+
+            <div class="control-group">
+                <label>Color Mode</label>
+                <select id="colorModeSelect">
+                    <option value="inherit">Inherit Anchor Color</option>
+                    <option value="frequency">Map to Frequency</option>
+                    <option value="white">Monochrome (White)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <h3>Harmonies</h3>
+                <label>Anchor 1 (Top)</label>
+                <select id="anchor1Select"></select>
+                
+                <label>Anchor 2 (Left)</label>
+                <select id="anchor2Select"></select>
+                
+                <label>Anchor 3 (Right)</label>
+                <select id="anchor3Select"></select>
+            </div>
+
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="randomToggle"> 
+                    Randomize Anchors
+                </label>
+                <div>
+                    Every <input type="number" id="randomInterval" min="1" max="60" value="3" style="width: 50px;"> sec
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Audio Effects</h3>
+                <!-- Delay -->
+                <label>Delay Time (s)</label>
+                <input type="range" id="delayTime" min="0" max="1" step="0.01" value="0.0">
+                <label>Delay Feedback</label>
+                <input type="range" id="delayFeedback" min="0" max="0.9" step="0.01" value="0.0">
+                
+                <!-- Tremolo (Amplitude LFO) -->
+                <label>Tremolo Rate (Hz)</label>
+                <input type="range" id="tremoloRate" min="0.1" max="20" step="0.1" value="5">
+                <label>Tremolo Depth</label>
+                <input type="range" id="tremoloDepth" min="0" max="1" step="0.01" value="0">
+                
+                <!-- Vibrato (Pitch LFO) -->
+                <label>Pitch LFO Rate (Hz)</label>
+                <input type="range" id="pitchLfoRate" min="0.1" max="20" step="0.1" value="5">
+                <label>Pitch LFO Depth (Hz)</label>
+                <input type="range" id="pitchLfoDepth" min="0" max="100" step="1" value="0">
+            </div>
+
+            <div class="control-group stats-group">
+                <div>Iter: <span id="iterCount">0</span></div>
+                <div>Note: <span id="currentNote">-</span></div>
+            </div>
+            
+            <button id="resetViewBtn">Reset View & Clear</button>
+        </aside>
+
+        <canvas id="fractalCanvas"></canvas>
+        
+        <div id="zoom-controls">
+            <button id="zoomInBtn">+</button>
+            <button id="zoomOutBtn">-</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
