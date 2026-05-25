@@ -15,6 +15,9 @@ const ctx = canvas.getContext('2d');
 
 const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
+const autoRotateSlider = document.getElementById('autoRotateSlider');
+const autoRotateValueEl = document.getElementById('autoRotateValue');
+const pointMemoryEl = document.getElementById('pointMemory');
 const zoomValueEl = document.getElementById('zoomValue');
 const colorModeSelect = document.getElementById('colorModeSelect');
 
@@ -40,18 +43,19 @@ const masterVolumeEl = document.getElementById('masterVolume');
 const delayTimeEl = document.getElementById('delayTime');
 const delayFeedbackEl = document.getElementById('delayFeedback');
 const delayMixEl = document.getElementById('delayMix');
-const tremoloRateEl = document.getElementById('tremoloRate');
-const tremoloDepthEl = document.getElementById('tremoloDepth');
+const reverbSizeEl = document.getElementById('reverbSize');
+const reverbMixEl = document.getElementById('reverbMix');
 const pitchLfoRateEl = document.getElementById('pitchLfoRate');
 const pitchLfoDepthEl = document.getElementById('pitchLfoDepth');
 
 const requiredElements = [
     homeView, gameView, enterBtn, navBackBtn, navHelpBtn, navSettingsBtn,
     helpModal, closeHelpBtn, sidebar, canvas, speedSlider, speedValue,
+    autoRotateSlider, autoRotateValueEl, pointMemoryEl,
     zoomValueEl, colorModeSelect, randomToggle, randomInterval, iterCountEl,
     currentNoteEl, resetViewBtn, zoomInBtn, zoomOutBtn, selectionBox,
-    masterVolumeEl, delayTimeEl, delayFeedbackEl, delayMixEl, tremoloRateEl,
-    tremoloDepthEl, pitchLfoRateEl, pitchLfoDepthEl, ...anchorSelects
+    masterVolumeEl, delayTimeEl, delayFeedbackEl, delayMixEl, reverbSizeEl,
+    reverbMixEl, pitchLfoRateEl, pitchLfoDepthEl, ...anchorSelects
 ];
 
 if (requiredElements.some(element => !element)) {
@@ -76,6 +80,8 @@ const NOTE_GAIN = 0.035;
 const SILENCE_GAIN = 0;
 const ENVELOPE_FLOOR = 0.0001;
 const AUDIO_VOICE_COUNT = 18;
+const PROCESS_RATE_MAX = 100;
+const MAX_FAST_POINTS_PER_FRAME = 120;
 
 // Generar diccionario de notas temperadas (C3 a B5).
 const NOTES = [];
@@ -90,8 +96,8 @@ for (let octave = 3; octave <= 5; octave++) {
 // --- Audio Setup ---
 let audioCtx;
 let masterFilter;
-let tremoloOsc, tremoloDepthNode, tremoloGain;
 let delayNode, delayFeedbackNode, delaySendGain, delayWetGain;
+let reverbNode, reverbToneNode, reverbSendGain, reverbWetGain;
 let dryGain, outputGain, limiterNode;
 let pitchLFO, pitchDepthNode;
 let audioVoices = [];
@@ -129,10 +135,37 @@ function updateDelayMix() {
     if (delayWetGain) setAudioParam(delayWetGain.gain, wet);
 }
 
-function updateTremoloDepth() {
-    const depth = readNumber(tremoloDepthEl, 0, 0, 1);
-    if (tremoloDepthNode) setAudioParam(tremoloDepthNode.gain, depth * 0.5);
-    if (tremoloGain) setAudioParam(tremoloGain.gain, 1 - depth * 0.5);
+function updateReverbMix() {
+    const mix = readNumber(reverbMixEl, 0, 0, 1);
+    const wet = Math.sin(mix * Math.PI * 0.5) * 0.7;
+
+    if (reverbSendGain) setAudioParam(reverbSendGain.gain, mix > 0 ? 1 : 0);
+    if (reverbWetGain) setAudioParam(reverbWetGain.gain, wet);
+}
+
+function createReverbImpulse(durationSeconds) {
+    const duration = readNumber(reverbSizeEl, durationSeconds, 0.5, 6);
+    const sampleRate = audioCtx.sampleRate;
+    const length = Math.max(1, Math.floor(sampleRate * duration));
+    const impulse = audioCtx.createBuffer(2, length, sampleRate);
+    const decay = 3.2;
+
+    for (let channel = 0; channel < impulse.numberOfChannels; channel++) {
+        const samples = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            const progress = i / length;
+            const envelope = Math.pow(1 - progress, decay);
+            samples[i] = (Math.random() * 2 - 1) * envelope;
+        }
+    }
+
+    return impulse;
+}
+
+function updateReverbSize() {
+    if (reverbNode) {
+        reverbNode.buffer = createReverbImpulse(readNumber(reverbSizeEl, 2.4, 0.5, 6));
+    }
 }
 
 function updateFilterFromZoom() {
@@ -198,20 +231,6 @@ function initAudio() {
 
         audioCtx = new AudioCtor();
 
-        tremoloOsc = audioCtx.createOscillator();
-        tremoloOsc.type = 'sine';
-        tremoloOsc.frequency.value = readNumber(tremoloRateEl, 5, 0.1, 20);
-
-        tremoloDepthNode = audioCtx.createGain();
-        tremoloDepthNode.gain.value = 0;
-
-        tremoloGain = audioCtx.createGain();
-        tremoloGain.gain.value = 1;
-
-        tremoloOsc.connect(tremoloDepthNode);
-        tremoloDepthNode.connect(tremoloGain.gain);
-        tremoloOsc.start();
-
         pitchLFO = audioCtx.createOscillator();
         pitchLFO.type = 'sine';
         pitchLFO.frequency.value = readNumber(pitchLfoRateEl, 5, 0.1, 20);
@@ -234,6 +253,20 @@ function initAudio() {
         delayWetGain = audioCtx.createGain();
         delayWetGain.gain.value = 0;
 
+        reverbNode = audioCtx.createConvolver();
+        reverbNode.buffer = createReverbImpulse(2.4);
+
+        reverbToneNode = audioCtx.createBiquadFilter();
+        reverbToneNode.type = 'lowpass';
+        reverbToneNode.frequency.value = 6500;
+        reverbToneNode.Q.value = 0.2;
+
+        reverbSendGain = audioCtx.createGain();
+        reverbSendGain.gain.value = 0;
+
+        reverbWetGain = audioCtx.createGain();
+        reverbWetGain.gain.value = 0;
+
         dryGain = audioCtx.createGain();
         dryGain.gain.value = 1;
 
@@ -254,9 +287,9 @@ function initAudio() {
 
         createAudioVoicePool();
 
-        masterFilter.connect(tremoloGain);
-        tremoloGain.connect(dryGain);
-        tremoloGain.connect(delaySendGain);
+        masterFilter.connect(dryGain);
+        masterFilter.connect(delaySendGain);
+        masterFilter.connect(reverbSendGain);
 
         dryGain.connect(outputGain);
         delaySendGain.connect(delayNode);
@@ -264,12 +297,18 @@ function initAudio() {
         delayFeedbackNode.connect(delayNode);
         delayNode.connect(delayWetGain);
         delayWetGain.connect(outputGain);
+        delayWetGain.connect(reverbSendGain);
+
+        reverbSendGain.connect(reverbNode);
+        reverbNode.connect(reverbToneNode);
+        reverbToneNode.connect(reverbWetGain);
+        reverbWetGain.connect(outputGain);
 
         outputGain.connect(limiterNode);
         limiterNode.connect(audioCtx.destination);
 
-        updateTremoloDepth();
         updateDelayMix();
+        updateReverbMix();
         updateMasterVolume();
         updateFilterFromZoom();
     }
@@ -288,13 +327,14 @@ function shutdownAudio({ immediate = false } = {}) {
 
     audioCtx = null;
     masterFilter = null;
-    tremoloOsc = null;
-    tremoloDepthNode = null;
-    tremoloGain = null;
     delayNode = null;
     delayFeedbackNode = null;
     delaySendGain = null;
     delayWetGain = null;
+    reverbNode = null;
+    reverbToneNode = null;
+    reverbSendGain = null;
+    reverbWetGain = null;
     dryGain = null;
     outputGain = null;
     limiterNode = null;
@@ -352,10 +392,8 @@ delayFeedbackEl.addEventListener('input', e => {
     if (delayFeedbackNode) setAudioParam(delayFeedbackNode.gain, readNumber(e.target, 0, 0, 0.85));
 });
 delayMixEl.addEventListener('input', updateDelayMix);
-tremoloRateEl.addEventListener('input', e => {
-    if (tremoloOsc) setAudioParam(tremoloOsc.frequency, readNumber(e.target, 5, 0.1, 20));
-});
-tremoloDepthEl.addEventListener('input', updateTremoloDepth);
+reverbSizeEl.addEventListener('change', updateReverbSize);
+reverbMixEl.addEventListener('input', updateReverbMix);
 pitchLfoRateEl.addEventListener('input', e => {
     if (pitchLFO) setAudioParam(pitchLFO.frequency, readNumber(e.target, 5, 0.1, 20));
 });
@@ -379,6 +417,9 @@ let animationFrameId = null;
 let randomTimerId = null;
 
 let lastStepTime = 0;
+let lastFastFrameTime = 0;
+let lastAutoRotateTime = 0;
+let fastPointBudget = 0;
 let slowState = 0;
 let activeAnchor = null;
 let activeNote = null;
@@ -414,6 +455,9 @@ function resetFractalState() {
     currentX = width / 2;
     currentY = height / 2;
     lastStepTime = 0;
+    lastFastFrameTime = 0;
+    lastAutoRotateTime = 0;
+    fastPointBudget = 0;
     slowState = 0;
     activeAnchor = null;
     activeNote = null;
@@ -455,6 +499,8 @@ window.addEventListener('resize', resize);
 // --- View Transforms (Zoom & Pan) ---
 let isDragging = false;
 let isDrawingBox = false;
+let isRotating = false;
+let rotateStartAngle = 0;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let boxStartX = 0;
@@ -484,6 +530,41 @@ function panView(dx, dy) {
     redrawCanvas();
 }
 
+function getCircleScreenParams() {
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.min(cx, cy) * 0.8;
+    return {
+        screenCx: cx * transform.scale + transform.offsetX,
+        screenCy: cy * transform.scale + transform.offsetY,
+        screenRadius: radius * transform.scale
+    };
+}
+
+function isNearCircle(mx, my) {
+    const { screenCx, screenCy, screenRadius } = getCircleScreenParams();
+    const dist = Math.sqrt((mx - screenCx) ** 2 + (my - screenCy) ** 2);
+    return Math.abs(dist - screenRadius) < 30;
+}
+
+function getAngleFromCenter(mx, my) {
+    const { screenCx, screenCy } = getCircleScreenParams();
+    return Math.atan2(my - screenCy, mx - screenCx);
+}
+
+function rotateAnchors(angleDelta) {
+    const cx = width / 2;
+    const cy = height / 2;
+    anchors.forEach(a => {
+        const dx = a.x - cx;
+        const dy = a.y - cy;
+        const r = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) + angleDelta;
+        a.x = cx + Math.cos(angle) * r;
+        a.y = cy + Math.sin(angle) * r;
+    });
+}
+
 canvas.addEventListener('mousedown', e => {
     if (e.shiftKey) {
         isDrawingBox = true;
@@ -494,6 +575,10 @@ canvas.addEventListener('mousedown', e => {
         selectionBox.style.width = '0px';
         selectionBox.style.height = '0px';
         selectionBox.style.display = 'block';
+    } else if (isNearCircle(e.clientX, e.clientY)) {
+        isRotating = true;
+        rotateStartAngle = getAngleFromCenter(e.clientX, e.clientY);
+        canvas.style.cursor = 'grabbing';
     } else {
         isDragging = true;
         lastMouseX = e.clientX;
@@ -514,10 +599,17 @@ window.addEventListener('mousemove', e => {
         selectionBox.style.top = top + 'px';
         selectionBox.style.width = boxWidth + 'px';
         selectionBox.style.height = boxHeight + 'px';
+    } else if (isRotating) {
+        const newAngle = getAngleFromCenter(e.clientX, e.clientY);
+        rotateAnchors(newAngle - rotateStartAngle);
+        rotateStartAngle = newAngle;
+        redrawCanvas();
     } else if (isDragging) {
         panView(e.clientX - lastMouseX, e.clientY - lastMouseY);
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
+    } else {
+        canvas.style.cursor = isNearCircle(e.clientX, e.clientY) ? 'grab' : 'crosshair';
     }
 });
 
@@ -550,6 +642,8 @@ window.addEventListener('mouseup', e => {
         }
     }
     isDragging = false;
+    isRotating = false;
+    canvas.style.cursor = isNearCircle(e.clientX, e.clientY) ? 'grab' : 'crosshair';
 });
 
 canvas.addEventListener('dblclick', e => {
@@ -612,6 +706,9 @@ function redrawCanvas() {
     });
 
     if (activeAnchor) {
+        const midX = (currentX + activeAnchor.x) / 2;
+        const midY = (currentY + activeAnchor.y) / 2;
+
         ctx.beginPath();
         ctx.moveTo(currentX, currentY);
         ctx.lineTo(activeAnchor.x, activeAnchor.y);
@@ -624,6 +721,11 @@ function redrawCanvas() {
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.arc(currentX, currentY, 3 / transform.scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = activeColor || '#ffffff';
+        ctx.beginPath();
+        ctx.arc(midX, midY, 4 / transform.scale, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -679,65 +781,130 @@ function getPointColor(anchor, note) {
     return '#ffffff';
 }
 
-function trimPointBuffer() {
-    if (pointsBuffer.length > MAX_POINTS) {
-        pointsBuffer.splice(0, pointsBuffer.length - MAX_POINTS);
+function getPointMemoryMs() {
+    return readNumber(pointMemoryEl, 0, 0, 300) * 1000;
+}
+
+function trimPointBuffer(timestamp = performance.now()) {
+    const memoryMs = getPointMemoryMs();
+    let removeCount = 0;
+
+    if (memoryMs > 0) {
+        const cutoff = timestamp - memoryMs;
+        while (removeCount < pointsBuffer.length && pointsBuffer[removeCount].t < cutoff) {
+            removeCount++;
+        }
+    }
+
+    const overflowCount = pointsBuffer.length - removeCount - MAX_POINTS;
+    if (overflowCount > 0) {
+        removeCount += overflowCount;
+    }
+
+    if (removeCount > 0) {
+        pointsBuffer.splice(0, removeCount);
+        return true;
+    }
+
+    return false;
+}
+
+function addFractalPoint(color, timestamp) {
+    pointsBuffer.push({ x: currentX, y: currentY, c: color, t: timestamp });
+}
+
+function updateSpeedDisplay() {
+    const rate = Number.parseInt(speedSlider.value, 10) || 0;
+    speedValue.innerText = `${rate} pts/s`;
+}
+
+function updateAutoRotateDisplay() {
+    const val = Number.parseInt(autoRotateSlider.value, 10) || 0;
+    if (val === 0) {
+        autoRotateValueEl.innerText = 'off';
+    } else if (val > 0) {
+        autoRotateValueEl.innerText = `► ${val}°/s`;
+    } else {
+        autoRotateValueEl.innerText = `◄ ${Math.abs(val)}°/s`;
     }
 }
 
-function addFractalPoint(color) {
-    pointsBuffer.push({ x: currentX, y: currentY, c: color });
+function prepareActiveStep() {
+    const r = Math.floor(Math.random() * 3);
+    activeAnchor = anchors[r];
+    activeNote = NOTES[activeAnchor.noteIndex] || NOTES[0];
+    activeColor = getPointColor(activeAnchor, activeNote);
+}
+
+function commitActiveStep(timestamp) {
+    currentX = (currentX + activeAnchor.x) / 2;
+    currentY = (currentY + activeAnchor.y) / 2;
+
+    addFractalPoint(activeColor, timestamp);
+    playNote(activeNote.freq);
+    currentNoteEl.innerText = activeNote.name;
+    currentNoteEl.style.color = activeColor;
+    iteration++;
+    iterCountEl.innerText = iteration;
 }
 
 function iterate(timestamp) {
     if (!isPlaying) return;
 
     const frameTime = timestamp || performance.now();
-    const speed = Number.parseInt(speedSlider.value, 10) || 0;
 
-    if (speed > 0 && anchors.length === 3) {
-        if (speed <= 50) {
-            const delayMs = 1000 - ((speed - 1) * (980 / 49));
+    const autoRotateVal = Number.parseInt(autoRotateSlider.value, 10) || 0;
+    if (autoRotateVal !== 0 && !isRotating) {
+        if (lastAutoRotateTime) {
+            const elapsed = Math.min((frameTime - lastAutoRotateTime) / 1000, 0.1);
+            rotateAnchors(autoRotateVal * Math.PI / 180 * elapsed);
+        }
+    }
+    lastAutoRotateTime = frameTime;
 
-            if (frameTime - lastStepTime > delayMs) {
-                lastStepTime = frameTime;
+    const rate = Number.parseInt(speedSlider.value, 10) || 0;
+    let needsRedraw = trimPointBuffer(frameTime);
 
-                if (slowState === 0) {
-                    const r = Math.floor(Math.random() * 3);
-                    activeAnchor = anchors[r];
-                    activeNote = NOTES[activeAnchor.noteIndex] || NOTES[0];
-                    activeColor = getPointColor(activeAnchor, activeNote);
-                    slowState = 1;
-                    redrawCanvas();
-                } else {
-                    currentX = (currentX + activeAnchor.x) / 2;
-                    currentY = (currentY + activeAnchor.y) / 2;
+    if (rate > 0 && anchors.length === 3) {
+        if (rate <= PROCESS_RATE_MAX) {
+            slowState = 1;
+            if (!activeAnchor) prepareActiveStep();
+            if (!lastStepTime) lastStepTime = frameTime;
 
-                    addFractalPoint(activeColor);
-                    trimPointBuffer();
+            const elapsedSeconds = Math.min((frameTime - lastStepTime) / 1000, 0.25);
+            lastStepTime = frameTime;
+            lastFastFrameTime = 0;
+            fastPointBudget += rate * elapsedSeconds;
 
-                    playNote(activeNote.freq);
-                    currentNoteEl.innerText = activeNote.name;
-                    currentNoteEl.style.color = activeColor;
-                    iteration++;
-                    iterCountEl.innerText = iteration;
+            const pointsToDraw = Math.min(Math.floor(fastPointBudget), MAX_FAST_POINTS_PER_FRAME);
 
-                    slowState = 0;
-                    activeAnchor = null;
-                    redrawCanvas();
-                }
+            for (let k = 0; k < pointsToDraw; k++) {
+                commitActiveStep(frameTime);
+                prepareActiveStep();
             }
+
+            fastPointBudget -= pointsToDraw;
+            if (pointsToDraw > 0) trimPointBuffer(frameTime);
+
+            redrawCanvas();
+            needsRedraw = false;
         } else {
             if (activeAnchor) {
                 activeAnchor = null;
                 slowState = 0;
             }
 
-            const fastSpeed = speed - 50;
+            if (!lastFastFrameTime) lastFastFrameTime = frameTime;
+            const elapsedSeconds = Math.min((frameTime - lastFastFrameTime) / 1000, 0.25);
+            lastFastFrameTime = frameTime;
+            lastStepTime = frameTime;
+            fastPointBudget += rate * elapsedSeconds;
+
+            const pointsToDraw = Math.min(Math.floor(fastPointBudget), MAX_FAST_POINTS_PER_FRAME);
             let lastNote = null;
             let lastColor = '#ffffff';
 
-            for (let k = 0; k < fastSpeed; k++) {
+            for (let k = 0; k < pointsToDraw; k++) {
                 const r = Math.floor(Math.random() * 3);
                 const anchor = anchors[r];
                 const note = NOTES[anchor.noteIndex] || NOTES[0];
@@ -746,22 +913,35 @@ function iterate(timestamp) {
                 currentX = (currentX + anchor.x) / 2;
                 currentY = (currentY + anchor.y) / 2;
 
-                addFractalPoint(color);
+                addFractalPoint(color, frameTime);
                 lastNote = note;
                 lastColor = color;
                 iteration++;
             }
 
-            trimPointBuffer();
+            fastPointBudget -= pointsToDraw;
 
-            if (lastNote) {
+            if (pointsToDraw > 0) {
+                trimPointBuffer(frameTime);
                 playNote(lastNote.freq);
                 currentNoteEl.innerText = lastNote.name;
                 currentNoteEl.style.color = lastColor;
+                iterCountEl.innerText = iteration;
+                redrawCanvas();
+                needsRedraw = false;
             }
-            iterCountEl.innerText = iteration;
-            redrawCanvas();
         }
+    } else if (activeAnchor) {
+        activeAnchor = null;
+        slowState = 0;
+        lastStepTime = 0;
+        lastFastFrameTime = 0;
+        fastPointBudget = 0;
+        needsRedraw = true;
+    }
+
+    if (needsRedraw) {
+        redrawCanvas();
     }
 
     animationFrameId = requestAnimationFrame(iterate);
@@ -807,8 +987,8 @@ function randomizeNotes() {
 }
 
 function getRandomIntervalMs() {
-    const seconds = readNumber(randomInterval, 3, 1, 60);
-    randomInterval.value = String(Math.round(seconds));
+    const seconds = Math.round(readNumber(randomInterval, 2, 1, 60));
+    randomInterval.value = String(seconds);
     return seconds * 1000;
 }
 
@@ -829,8 +1009,16 @@ function startRandomizer() {
 randomToggle.addEventListener('change', startRandomizer);
 randomInterval.addEventListener('change', startRandomizer);
 
-speedSlider.addEventListener('input', e => {
-    speedValue.innerText = e.target.value;
+speedSlider.addEventListener('input', () => {
+    updateSpeedDisplay();
+});
+
+autoRotateSlider.addEventListener('input', updateAutoRotateDisplay);
+
+pointMemoryEl.addEventListener('change', () => {
+    if (trimPointBuffer(performance.now())) {
+        redrawCanvas();
+    }
 });
 
 colorModeSelect.addEventListener('change', redrawCanvas);
@@ -925,9 +1113,9 @@ function stopPlayback({ closeAudio = false, immediateAudio = false } = {}) {
     }
 
     stopRandomizer();
-    randomToggle.checked = false;
     isDragging = false;
     isDrawingBox = false;
+    isRotating = false;
     selectionBox.style.display = 'none';
 
     if (closeAudio) {
@@ -948,6 +1136,7 @@ enterBtn.addEventListener('click', () => {
     populateDropdowns();
     isPlaying = true;
     resize();
+    startRandomizer();
     startAnimation();
     canvas.focus({ preventScroll: true });
 });
@@ -990,4 +1179,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Init layout
+updateSpeedDisplay();
+updateAutoRotateDisplay();
 resize();

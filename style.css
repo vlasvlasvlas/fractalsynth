@@ -53,17 +53,21 @@ body, html {
 /* --- TOP BAR NAV --- */
 #top-bar {
     position: absolute;
-    top: 15px;
-    right: 15px;
+    right: 20px;
+    bottom: 108px;
     z-index: 50;
     display: flex;
-    gap: 10px;
+    flex-direction: column;
 }
 
 #top-bar button {
     margin: 0;
-    font-size: 16px;
-    padding: 5px 10px;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    font-weight: bold;
+    padding: 0;
+    border-radius: 0;
 }
 
 /* --- HELP MODAL --- */
@@ -168,24 +172,54 @@ select, input[type="number"] {
     font-family: monospace;
 }
 
-.inline-label {
-    display: inline;
-}
-
 input[type="range"] {
     width: 100%;
 }
 
 .stats-group {
-    font-size: 0.9rem;
+    display: grid;
+    grid-template-columns: 1fr 68px;
+    align-items: stretch;
+    gap: 10px;
+    font-size: 0.85rem;
     color: #bbbbbb;
     border: 1px dashed #ffffff;
-    padding: 10px;
+    padding: 8px;
+}
+
+.stats-readout {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
 }
 
 .stats-group span {
     color: #ffffff;
     font-weight: bold;
+}
+
+.stats-group #resetViewBtn {
+    width: 68px;
+    height: 68px;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+}
+
+.inline-label {
+    display: inline;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: #dddddd;
+    cursor: pointer;
+    margin-top: 4px;
 }
 
 button {
@@ -252,14 +286,12 @@ button.danger:active {
     }
 
     #top-bar {
-        top: 10px;
-        right: 10px;
-        gap: 6px;
+        right: 12px;
+        bottom: 100px;
     }
 
     #top-bar button {
-        font-size: 14px;
-        padding: 4px 8px;
+        font-size: 18px;
     }
 
     #sidebar {
