@@ -1,6 +1,6 @@
 # Fractal Synth (Chaos Game)
 
-An experimental web-based generative synthesizer and visualizer, based on the famous "Chaos Game" algorithm (Sierpiński Triangle) mapped to the Circle of Fifths.
+An experimental web-based generative synthesizer and visualizer, based on the famous "Chaos Game" algorithm ([Triángulo de Sierpinski](https://es.wikipedia.org/wiki/Tri%C3%A1ngulo_de_Sierpinski)) mapped to the Circle of Fifths.
 
 This project is an exploration of algorithmic music composition paired with mathematical visualizations. It uses pure Vanilla JavaScript, HTML Canvas, and the Web Audio API with a brutalist "Web 1.0" design aesthetic.
 
