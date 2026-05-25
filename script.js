@@ -840,30 +840,6 @@ function redrawCanvas() {
         ctx.fillText(note.name, a.x + dirX * offset, a.y + dirY * offset);
     });
 
-    if (activeAnchor) {
-        const midX = (currentX + activeAnchor.x) / 2;
-        const midY = (currentY + activeAnchor.y) / 2;
-
-        ctx.beginPath();
-        ctx.moveTo(currentX, currentY);
-        ctx.lineTo(activeAnchor.x, activeAnchor.y);
-        ctx.strokeStyle = activeColor || '#ffffff';
-        ctx.lineWidth = 1 / transform.scale;
-        ctx.setLineDash([5 / transform.scale, 5 / transform.scale]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(currentX, currentY, 3 / transform.scale, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = activeColor || '#ffffff';
-        ctx.beginPath();
-        ctx.arc(midX, midY, 4 / transform.scale, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
     const size = 1.5 / transform.scale;
     const colorPaths = {};
 
@@ -1323,7 +1299,13 @@ window.addEventListener('freeze', () => {
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
-        stopPlayback({ closeAudio: true, immediateAudio: true });
+        if (audioCtx && audioCtx.state === 'running') {
+            audioCtx.suspend().catch(() => {});
+        }
+    } else if (isPlaying) {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+        }
     }
 });
 
