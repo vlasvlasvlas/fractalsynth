@@ -148,14 +148,25 @@ function createReverbImpulse(durationSeconds) {
     const sampleRate = audioCtx.sampleRate;
     const length = Math.max(1, Math.floor(sampleRate * duration));
     const impulse = audioCtx.createBuffer(2, length, sampleRate);
-    const decay = 3.2;
+    const decay = 2.8;
+
+    // Early reflection times (slightly different per channel for stereo width)
+    const earlyL = [0.007, 0.013, 0.023, 0.037, 0.054, 0.071].map(t => Math.floor(t * sampleRate));
+    const earlyR = [0.009, 0.017, 0.027, 0.041, 0.059, 0.076].map(t => Math.floor(t * sampleRate));
+    const earlySet = [new Set(earlyL), new Set(earlyR)];
 
     for (let channel = 0; channel < impulse.numberOfChannels; channel++) {
         const samples = impulse.getChannelData(channel);
+        const reflections = earlySet[channel];
         for (let i = 0; i < length; i++) {
             const progress = i / length;
-            const envelope = Math.pow(1 - progress, decay);
-            samples[i] = (Math.random() * 2 - 1) * envelope;
+            const tail = (Math.random() * 2 - 1) * Math.pow(1 - progress, decay);
+            if (reflections.has(i)) {
+                const earlyGain = (1 - progress * 4) * 0.55;
+                samples[i] = (Math.random() > 0.5 ? 1 : -1) * Math.max(0, earlyGain) + tail * 0.3;
+            } else {
+                samples[i] = tail;
+            }
         }
     }
 
@@ -426,20 +437,23 @@ let activeNote = null;
 let activeColor = null;
 let dropdownsInitialized = false;
 let lastFocusedElement = null;
+let anchorRotationOffset = 0;
+let isHoveringCircle = false;
+let lastPinchDist = 0;
 
 function setupAnchors() {
     const cx = width / 2;
     const cy = height / 2;
     const radius = Math.min(cx, cy) * 0.8;
-    const angles = [
+    const baseAngles = [
         -Math.PI / 2,
         -Math.PI / 2 + (Math.PI * 2 / 3) * 2,
         -Math.PI / 2 + (Math.PI * 2 / 3)
     ];
 
-    anchors = angles.map((angle, index) => ({
-        x: cx + Math.cos(angle) * radius,
-        y: cy + Math.sin(angle) * radius,
+    anchors = baseAngles.map((angle, index) => ({
+        x: cx + Math.cos(angle + anchorRotationOffset) * radius,
+        y: cy + Math.sin(angle + anchorRotationOffset) * radius,
         color: ANCHOR_COLORS[index],
         noteIndex: anchors[index] ? anchors[index].noteIndex : 0
     }));
@@ -553,6 +567,7 @@ function getAngleFromCenter(mx, my) {
 }
 
 function rotateAnchors(angleDelta) {
+    anchorRotationOffset += angleDelta;
     const cx = width / 2;
     const cy = height / 2;
     anchors.forEach(a => {
@@ -609,7 +624,12 @@ window.addEventListener('mousemove', e => {
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
     } else {
-        canvas.style.cursor = isNearCircle(e.clientX, e.clientY) ? 'grab' : 'crosshair';
+        const near = isNearCircle(e.clientX, e.clientY);
+        if (near !== isHoveringCircle) {
+            isHoveringCircle = near;
+            redrawCanvas();
+        }
+        canvas.style.cursor = near ? 'grab' : 'crosshair';
     }
 });
 
@@ -643,12 +663,73 @@ window.addEventListener('mouseup', e => {
     }
     isDragging = false;
     isRotating = false;
+    isHoveringCircle = false;
     canvas.style.cursor = isNearCircle(e.clientX, e.clientY) ? 'grab' : 'crosshair';
 });
 
 canvas.addEventListener('dblclick', e => {
     applyZoom(1.5, e.clientX, e.clientY);
 });
+
+// --- Touch Events ---
+function getTouchDist(e) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+        isDragging = false;
+        isRotating = false;
+        lastPinchDist = getTouchDist(e);
+    } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (isNearCircle(t.clientX, t.clientY)) {
+            isRotating = true;
+            rotateStartAngle = getAngleFromCenter(t.clientX, t.clientY);
+        } else {
+            isDragging = true;
+            lastMouseX = t.clientX;
+            lastMouseY = t.clientY;
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+        const dist = getTouchDist(e);
+        if (lastPinchDist) {
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            applyZoom(dist / lastPinchDist, midX, midY);
+        }
+        lastPinchDist = dist;
+    } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (isRotating) {
+            const newAngle = getAngleFromCenter(t.clientX, t.clientY);
+            rotateAnchors(newAngle - rotateStartAngle);
+            rotateStartAngle = newAngle;
+            redrawCanvas();
+        } else if (isDragging) {
+            panView(t.clientX - lastMouseX, t.clientY - lastMouseY);
+            lastMouseX = t.clientX;
+            lastMouseY = t.clientY;
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (e.touches.length < 2) lastPinchDist = 0;
+    if (e.touches.length === 0) {
+        isDragging = false;
+        isRotating = false;
+    }
+}, { passive: false });
 
 canvas.addEventListener('wheel', e => {
     e.preventDefault();
@@ -661,6 +742,56 @@ zoomInBtn.addEventListener('click', () => applyZoom(1.5));
 zoomOutBtn.addEventListener('click', () => applyZoom(1 / 1.5));
 
 // --- Rendering ---
+function drawRotationArrows(cx, cy, radius, alpha) {
+    if (alpha < 0.01) return;
+    const r = radius + 16 / transform.scale;
+    const arcSpan = 0.5;
+    const s = 7 / transform.scale;
+
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 1.5 / transform.scale;
+    ctx.setLineDash([]);
+
+    // CW arc — top-right area
+    const cwS = -Math.PI / 2 + 0.28;
+    const cwE = cwS + arcSpan;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, cwS, cwE);
+    ctx.stroke();
+    const ex1 = cx + Math.cos(cwE) * r;
+    const ey1 = cy + Math.sin(cwE) * r;
+    const tx1 = Math.cos(cwE + Math.PI / 2);
+    const ty1 = Math.sin(cwE + Math.PI / 2);
+    const nx1 = Math.cos(cwE);
+    const ny1 = Math.sin(cwE);
+    ctx.beginPath();
+    ctx.moveTo(ex1 + tx1 * s, ey1 + ty1 * s);
+    ctx.lineTo(ex1 - tx1 * s * 0.4 + nx1 * s * 0.6, ey1 - ty1 * s * 0.4 + ny1 * s * 0.6);
+    ctx.lineTo(ex1 - tx1 * s * 0.4 - nx1 * s * 0.6, ey1 - ty1 * s * 0.4 - ny1 * s * 0.6);
+    ctx.closePath();
+    ctx.fill();
+
+    // CCW arc — bottom-left area
+    const ccwE = Math.PI / 2 + 0.28;
+    const ccwS = ccwE + arcSpan;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, ccwS, ccwE, true);
+    ctx.stroke();
+    const ex2 = cx + Math.cos(ccwE) * r;
+    const ey2 = cy + Math.sin(ccwE) * r;
+    const tx2 = Math.cos(ccwE - Math.PI / 2);
+    const ty2 = Math.sin(ccwE - Math.PI / 2);
+    const nx2 = Math.cos(ccwE);
+    const ny2 = Math.sin(ccwE);
+    ctx.beginPath();
+    ctx.moveTo(ex2 + tx2 * s, ey2 + ty2 * s);
+    ctx.lineTo(ex2 - tx2 * s * 0.4 + nx2 * s * 0.6, ey2 - ty2 * s * 0.4 + ny2 * s * 0.6);
+    ctx.lineTo(ex2 - tx2 * s * 0.4 - nx2 * s * 0.6, ey2 - ty2 * s * 0.4 - ny2 * s * 0.6);
+    ctx.closePath();
+    ctx.fill();
+}
+
 function redrawCanvas() {
     if (!width || !height) return;
 
@@ -681,11 +812,15 @@ function redrawCanvas() {
     const cy = height / 2;
     const radius = Math.min(cx, cy) * 0.8;
 
+    const circleAlpha = isRotating ? 0.5 : (isHoveringCircle ? 0.38 : 0.2);
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 1 / transform.scale;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${circleAlpha})`;
+    ctx.lineWidth = (isHoveringCircle || isRotating ? 1.5 : 1) / transform.scale;
     ctx.stroke();
+
+    const arrowAlpha = isRotating ? 0.9 : (isHoveringCircle ? 0.65 : 0.18);
+    drawRotationArrows(cx, cy, radius, arrowAlpha);
 
     ctx.font = `${20 / transform.scale}px monospace`;
     ctx.textAlign = 'center';
@@ -777,6 +912,11 @@ function getPointColor(anchor, note) {
         const maxF = NOTES[NOTES.length - 1].freq;
         const hue = ((note.freq - minF) / (maxF - minF)) * 360;
         return HSLToHex(hue, 80, 60);
+    }
+    if (mode === 'semitone') {
+        // Same note = same color across all octaves (C3=C4=C5)
+        const hue = (anchor.noteIndex % 12) / 12 * 360;
+        return HSLToHex(hue, 85, 55);
     }
     return '#ffffff';
 }
@@ -901,6 +1041,7 @@ function iterate(timestamp) {
             fastPointBudget += rate * elapsedSeconds;
 
             const pointsToDraw = Math.min(Math.floor(fastPointBudget), MAX_FAST_POINTS_PER_FRAME);
+            const notesThisFrame = new Map();
             let lastNote = null;
             let lastColor = '#ffffff';
 
@@ -914,6 +1055,7 @@ function iterate(timestamp) {
                 currentY = (currentY + anchor.y) / 2;
 
                 addFractalPoint(color, frameTime);
+                notesThisFrame.set(anchor.noteIndex, { note, color });
                 lastNote = note;
                 lastColor = color;
                 iteration++;
@@ -923,7 +1065,7 @@ function iterate(timestamp) {
 
             if (pointsToDraw > 0) {
                 trimPointBuffer(frameTime);
-                playNote(lastNote.freq);
+                notesThisFrame.forEach(({ note }) => playNote(note.freq));
                 currentNoteEl.innerText = lastNote.name;
                 currentNoteEl.style.color = lastColor;
                 iterCountEl.innerText = iteration;
@@ -1116,6 +1258,8 @@ function stopPlayback({ closeAudio = false, immediateAudio = false } = {}) {
     isDragging = false;
     isDrawingBox = false;
     isRotating = false;
+    isHoveringCircle = false;
+    lastPinchDist = 0;
     selectionBox.style.display = 'none';
 
     if (closeAudio) {
@@ -1132,16 +1276,21 @@ enterBtn.addEventListener('click', () => {
     homeView.style.display = 'none';
     gameView.style.display = 'block';
 
+    anchorRotationOffset = 0;
     initAudio();
     populateDropdowns();
     isPlaying = true;
     resize();
+    if (window.innerWidth <= 600) {
+        sidebar.classList.add('hidden');
+    }
     startRandomizer();
     startAnimation();
     canvas.focus({ preventScroll: true });
 });
 
 navBackBtn.addEventListener('click', () => {
+    if (!confirm('Volver al inicio? Se perderá el progreso actual.')) return;
     stopPlayback({ closeAudio: true });
     closeHelpModal();
 
