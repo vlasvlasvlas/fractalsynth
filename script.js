@@ -107,6 +107,13 @@ function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
+function hexToRGBA(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function readNumber(element, fallback, min, max) {
     const value = Number.parseFloat(element.value);
     if (!Number.isFinite(value)) return fallback;
@@ -440,6 +447,7 @@ let lastFocusedElement = null;
 let anchorRotationOffset = 0;
 let isHoveringCircle = false;
 let lastPinchDist = 0;
+let lastPlayedColor = '#ffffff';
 
 function setupAnchors() {
     const cx = width / 2;
@@ -742,14 +750,14 @@ zoomInBtn.addEventListener('click', () => applyZoom(1.5));
 zoomOutBtn.addEventListener('click', () => applyZoom(1 / 1.5));
 
 // --- Rendering ---
-function drawRotationArrows(cx, cy, radius, alpha) {
+function drawRotationArrows(cx, cy, radius, alpha, color = '#ffffff') {
     if (alpha < 0.01) return;
     const r = radius + 16 / transform.scale;
     const arcSpan = 0.5;
     const s = 7 / transform.scale;
 
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.strokeStyle = hexToRGBA(color, alpha);
+    ctx.fillStyle = hexToRGBA(color, alpha);
     ctx.lineWidth = 1.5 / transform.scale;
     ctx.setLineDash([]);
 
@@ -812,15 +820,15 @@ function redrawCanvas() {
     const cy = height / 2;
     const radius = Math.min(cx, cy) * 0.8;
 
-    const circleAlpha = isRotating ? 0.5 : (isHoveringCircle ? 0.38 : 0.2);
+    const circleAlpha = isRotating ? 0.55 : (isHoveringCircle ? 0.42 : 0.22);
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${circleAlpha})`;
+    ctx.strokeStyle = hexToRGBA(lastPlayedColor, circleAlpha);
     ctx.lineWidth = (isHoveringCircle || isRotating ? 1.5 : 1) / transform.scale;
     ctx.stroke();
 
     const arrowAlpha = isRotating ? 0.9 : (isHoveringCircle ? 0.65 : 0.18);
-    drawRotationArrows(cx, cy, radius, arrowAlpha);
+    drawRotationArrows(cx, cy, radius, arrowAlpha, lastPlayedColor);
 
     ctx.font = `${20 / transform.scale}px monospace`;
     ctx.textAlign = 'center';
@@ -957,6 +965,7 @@ function commitActiveStep(timestamp) {
     currentY = (currentY + activeAnchor.y) / 2;
 
     addFractalPoint(activeColor, timestamp);
+    lastPlayedColor = activeAnchor.color;
     playNote(activeNote.freq);
     currentNoteEl.innerText = activeNote.name;
     currentNoteEl.style.color = activeColor;
@@ -1032,6 +1041,7 @@ function iterate(timestamp) {
 
                 addFractalPoint(color, frameTime);
                 notesThisFrame.set(anchor.noteIndex, { note, color });
+                lastPlayedColor = anchor.color;
                 lastNote = note;
                 lastColor = color;
                 iteration++;
