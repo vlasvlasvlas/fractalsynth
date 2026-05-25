@@ -44,6 +44,61 @@ Tocar la piramide para entrar. El fractal arranca solo, girando despacio hacia l
 - **Palette**: elige entre 10 paletas de colores (Neon, Synthwave, Sunset, Ocean, Forest, Lava, Candy, Ember, Ice, Ghost). Agregar paletas en `palettes.js`.
 - **Color Mode**: Inherit Anchor Color (default), Map to Frequency, Chromatic (by note), Monochrome.
 
+### Synth
+
+Elige el carácter sonoro del sintetizador. Cada preset configura la forma de onda, el envelope de cada nota y los niveles de efectos. Después de elegir un preset podés seguir ajustando los sliders de Audio Effects libremente.
+
+| Preset | Waveform | Estilo |
+|---|---|---|
+| **Default** | triangle | Sonido base, limpio, sin efectos |
+| **Cosmos (Vangelis)** | sine | Pad etéreo, ataque lento, reverb profundo |
+| **Algorithmic (Spiegel)** | sine | Sine puro, matemático, minimal |
+| **Drone** | sawtooth | Ataque muy lento, reverb largo, envolvente |
+| **Sequencer (Moroder)** | sawtooth | Corto y pulsante, delay rítmico |
+| **Moog (Wendy Carlos)** | square | Articulado, vibrato pronunciado |
+| **Space Lady** | sine | Dreamy, notas largas, carácter etéreo |
+
+#### Agregar nuevos presets de synth
+
+Editar `synth-presets.js` y agregar un objeto al array `SYNTH_PRESETS`:
+
+```js
+{
+    id: 'mi_preset',             // identificador único (sin espacios)
+    name: 'Mi Preset',           // nombre que aparece en el dropdown
+    description: 'Descripción.', // texto visible debajo del dropdown
+    osc: 'sine',                 // sine | triangle | sawtooth | square
+    attack: 0.01,                // segundos (0.001 – 1.0)
+    duration: 0.3,               // segundos (0.05 – 4.0)
+    gain: 0.035,                 // ganancia pico (0.01 – 0.08)
+    delay:   { time: 0.0, feedback: 0.0, mix: 0.0  },
+    reverb:  { size: 2.4, mix: 0.0  },
+    vibrato: { rate: 5.0, depth: 0  },
+},
+```
+
+Estructura YAML equivalente (solo como referencia documental, el archivo usa JS):
+
+```yaml
+- id: mi_preset
+  name: Mi Preset
+  description: Descripción.
+  osc: sine              # sine | triangle | sawtooth | square
+  attack: 0.01           # segundos  (0.001 – 1.0)
+  duration: 0.3          # segundos  (0.05 – 4.0)
+  gain: 0.035            # 0.01 – 0.08
+  delay:
+    time: 0.0            # 0.0 – 1.0
+    feedback: 0.0        # 0.0 – 0.85
+    mix: 0.0             # 0.0 – 1.0
+  reverb:
+    size: 2.4            # 0.5 – 6.0
+    mix: 0.0             # 0.0 – 1.0
+  vibrato:
+    rate: 5.0            # Hz  (0.1 – 20)
+    depth: 0             # cents (0 – 100)
+```
+
 ### Audio Effects
 
 - **Master Volume**: volumen general.

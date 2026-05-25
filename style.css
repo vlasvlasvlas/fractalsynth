@@ -213,6 +213,13 @@ input[type="range"] {
     display: inline;
 }
 
+.preset-desc {
+    margin: 4px 0 0 0;
+    font-size: 0.75rem;
+    color: #888888;
+    line-height: 1.4;
+}
+
 .motion-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

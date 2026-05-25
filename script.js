@@ -18,6 +18,8 @@ const autoRotateSlider = document.getElementById('autoRotateSlider');
 const pointMemoryEl = document.getElementById('pointMemory');
 const chaosRatioEl = document.getElementById('chaosRatio');
 const pointSizeEl = document.getElementById('pointSize');
+const synthPresetSelect = document.getElementById('synthPresetSelect');
+const synthPresetDesc = document.getElementById('synthPresetDesc');
 const zoomValueEl = document.getElementById('zoomValue');
 const paletteSelect = document.getElementById('paletteSelect');
 const colorModeSelect = document.getElementById('colorModeSelect');
@@ -56,7 +58,7 @@ const requiredElements = [
     currentNoteEl, resetViewBtn, zoomInBtn, zoomOutBtn, selectionBox,
     masterVolumeEl, delayTimeEl, delayFeedbackEl, delayMixEl, reverbSizeEl,
     reverbMixEl, pitchLfoRateEl, pitchLfoDepthEl, presetSelect, anchorsContainer,
-    pointSizeEl
+    pointSizeEl, synthPresetSelect, synthPresetDesc
 ];
 
 if (requiredElements.some(element => !element)) {
@@ -213,11 +215,38 @@ function updateFilterFromZoom() {
     setAudioParam(masterFilter.frequency, newFreq, FILTER_SMOOTHING);
 }
 
+function applySynthPreset(id) {
+    const preset = SYNTH_PRESETS.find(p => p.id === id);
+    if (!preset) return;
+    currentSynthPreset = preset;
+    synthPresetDesc.textContent = preset.description;
+
+    audioVoices.forEach(({ osc }) => {
+        try { osc.type = preset.osc; } catch (_e) {}
+    });
+
+    delayTimeEl.value     = String(preset.delay.time);
+    delayFeedbackEl.value = String(preset.delay.feedback);
+    delayMixEl.value      = String(preset.delay.mix);
+    reverbSizeEl.value    = String(preset.reverb.size);
+    reverbMixEl.value     = String(preset.reverb.mix);
+    pitchLfoRateEl.value  = String(preset.vibrato.rate);
+    pitchLfoDepthEl.value = String(preset.vibrato.depth);
+
+    if (delayNode) setAudioParam(delayNode.delayTime, preset.delay.time);
+    if (delayFeedbackNode) setAudioParam(delayFeedbackNode.gain, preset.delay.feedback);
+    updateDelayMix();
+    updateReverbSize();
+    updateReverbMix();
+    if (pitchLFO) setAudioParam(pitchLFO.frequency, preset.vibrato.rate);
+    if (pitchDepthNode) setAudioParam(pitchDepthNode.gain, preset.vibrato.depth);
+}
+
 function createAudioVoice() {
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
-    osc.type = 'triangle';
+    osc.type = currentSynthPreset ? currentSynthPreset.osc : 'triangle';
     osc.frequency.value = NOTES[0].freq;
     osc.detune.value = 0;
     gainNode.gain.value = SILENCE_GAIN;
@@ -416,11 +445,15 @@ function playNote(freq) {
     osc.frequency.setValueAtTime(freq, now);
     osc.detune.setValueAtTime(0, now);
 
+    const attack   = currentSynthPreset ? currentSynthPreset.attack   : NOTE_ATTACK;
+    const duration = currentSynthPreset ? currentSynthPreset.duration : NOTE_DURATION;
+    const gain     = currentSynthPreset ? currentSynthPreset.gain     : NOTE_GAIN;
+
     gainNode.gain.cancelScheduledValues(now);
     gainNode.gain.setValueAtTime(SILENCE_GAIN, now);
-    gainNode.gain.linearRampToValueAtTime(NOTE_GAIN, now + NOTE_ATTACK);
-    gainNode.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, now + NOTE_DURATION);
-    gainNode.gain.setValueAtTime(SILENCE_GAIN, now + NOTE_DURATION + 0.01);
+    gainNode.gain.linearRampToValueAtTime(gain, now + attack);
+    gainNode.gain.exponentialRampToValueAtTime(ENVELOPE_FLOOR, now + duration);
+    gainNode.gain.setValueAtTime(SILENCE_GAIN, now + duration + 0.01);
 }
 
 masterVolumeEl.addEventListener('input', updateMasterVolume);
@@ -449,6 +482,7 @@ let pointsBuffer = [];
 
 let anchors = [];
 let anchorCount = 3;
+let currentSynthPreset = null;
 let currentX = 0;
 let currentY = 0;
 let iteration = 0;
@@ -1160,11 +1194,21 @@ function populateDropdowns() {
             applyPreset(e.target.value);
         });
 
+        synthPresetSelect.innerHTML = SYNTH_PRESETS
+            .map(p => `<option value="${p.id}">${p.name}</option>`)
+            .join('');
+        synthPresetSelect.value = 'default';
+        synthPresetSelect.addEventListener('change', e => {
+            applySynthPreset(e.target.value);
+        });
+
         dropdownsInitialized = true;
     }
 
     buildAnchorSelects(anchorCount);
     setDefaultAnchorNotes();
+
+    if (!currentSynthPreset) applySynthPreset('default');
 }
 
 function randomizeNotes() {
