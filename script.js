@@ -14,9 +14,7 @@ const canvas = document.getElementById('fractalCanvas');
 const ctx = canvas.getContext('2d');
 
 const speedSlider = document.getElementById('speedSlider');
-const speedValue = document.getElementById('speedValue');
 const autoRotateSlider = document.getElementById('autoRotateSlider');
-const autoRotateValueEl = document.getElementById('autoRotateValue');
 const pointMemoryEl = document.getElementById('pointMemory');
 const zoomValueEl = document.getElementById('zoomValue');
 const paletteSelect = document.getElementById('paletteSelect');
@@ -29,6 +27,7 @@ const anchorSelects = [
 ];
 
 const randomToggle = document.getElementById('randomToggle');
+const randomColorToggle = document.getElementById('randomColorToggle');
 const randomInterval = document.getElementById('randomInterval');
 
 const iterCountEl = document.getElementById('iterCount');
@@ -51,8 +50,8 @@ const pitchLfoDepthEl = document.getElementById('pitchLfoDepth');
 
 const requiredElements = [
     homeView, gameView, enterBtn, navBackBtn, navHelpBtn, navSettingsBtn,
-    helpModal, closeHelpBtn, sidebar, canvas, speedSlider, speedValue,
-    autoRotateSlider, autoRotateValueEl, pointMemoryEl, paletteSelect,
+    helpModal, closeHelpBtn, sidebar, canvas, speedSlider,
+    autoRotateSlider, pointMemoryEl, paletteSelect, randomColorToggle,
     zoomValueEl, colorModeSelect, randomToggle, randomInterval, iterCountEl,
     currentNoteEl, resetViewBtn, zoomInBtn, zoomOutBtn, selectionBox,
     masterVolumeEl, delayTimeEl, delayFeedbackEl, delayMixEl, reverbSizeEl,
@@ -444,6 +443,7 @@ let iteration = 0;
 let isPlaying = false;
 let animationFrameId = null;
 let randomTimerId = null;
+let currentPaletteIndex = 0;
 
 let lastStepTime = 0;
 let lastFastFrameTime = 0;
@@ -905,22 +905,6 @@ function addFractalPoint(color, timestamp) {
     pointsBuffer.push({ x: currentX, y: currentY, c: color, t: timestamp });
 }
 
-function updateSpeedDisplay() {
-    const rate = Number.parseInt(speedSlider.value, 10) || 0;
-    speedValue.innerText = `${rate} pts/s`;
-}
-
-function updateAutoRotateDisplay() {
-    const val = Number.parseInt(autoRotateSlider.value, 10) || 0;
-    if (val === 0) {
-        autoRotateValueEl.innerText = 'off';
-    } else if (val > 0) {
-        autoRotateValueEl.innerText = `► ${val}°/s`;
-    } else {
-        autoRotateValueEl.innerText = `◄ ${Math.abs(val)}°/s`;
-    }
-}
-
 function prepareActiveStep() {
     const r = Math.floor(Math.random() * 3);
     activeAnchor = anchors[r];
@@ -947,7 +931,7 @@ function iterate(timestamp) {
 
     const frameTime = timestamp || performance.now();
 
-    const autoRotateVal = Number.parseInt(autoRotateSlider.value, 10) || 0;
+    const autoRotateVal = readNumber(autoRotateSlider, 3, -100, 100);
     if (autoRotateVal !== 0 && !isRotating) {
         if (lastAutoRotateTime) {
             const elapsed = Math.min((frameTime - lastAutoRotateTime) / 1000, 0.1);
@@ -956,7 +940,7 @@ function iterate(timestamp) {
     }
     lastAutoRotateTime = frameTime;
 
-    const rate = Number.parseInt(speedSlider.value, 10) || 0;
+    const rate = readNumber(speedSlider, 5, 0, 300);
     let needsRedraw = trimPointBuffer(frameTime);
 
     if (rate > 0 && anchors.length === 3) {
@@ -1091,6 +1075,12 @@ function randomizeNotes() {
     redrawCanvas();
 }
 
+function randomizeColors() {
+    currentPaletteIndex = (currentPaletteIndex + 1) % COLOR_PALETTES.length;
+    applyPalette(currentPaletteIndex);
+    paletteSelect.value = String(currentPaletteIndex);
+}
+
 function getRandomIntervalMs() {
     const seconds = Math.round(readNumber(randomInterval, 2, 1, 60));
     randomInterval.value = String(seconds);
@@ -1106,19 +1096,21 @@ function stopRandomizer() {
 
 function startRandomizer() {
     stopRandomizer();
-    if (randomToggle.checked) {
-        randomTimerId = setInterval(randomizeNotes, getRandomIntervalMs());
+    if (randomToggle.checked || randomColorToggle.checked) {
+        randomTimerId = setInterval(() => {
+            if (randomToggle.checked) randomizeNotes();
+            if (randomColorToggle.checked) randomizeColors();
+        }, getRandomIntervalMs());
     }
 }
 
 randomToggle.addEventListener('change', startRandomizer);
+randomColorToggle.addEventListener('change', startRandomizer);
 randomInterval.addEventListener('change', startRandomizer);
 
-speedSlider.addEventListener('input', () => {
-    updateSpeedDisplay();
+pointMemoryEl.addEventListener('input', () => {
+    if (Number.parseFloat(pointMemoryEl.value) < 0) pointMemoryEl.value = '0';
 });
-
-autoRotateSlider.addEventListener('input', updateAutoRotateDisplay);
 
 pointMemoryEl.addEventListener('change', () => {
     if (trimPointBuffer(performance.now())) {
@@ -1297,6 +1289,4 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Init layout
-updateSpeedDisplay();
-updateAutoRotateDisplay();
 resize();
