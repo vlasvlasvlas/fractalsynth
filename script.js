@@ -448,6 +448,7 @@ let anchorRotationOffset = 0;
 let isHoveringCircle = false;
 let lastPinchDist = 0;
 let lastPlayedColor = '#ffffff';
+let lastPlayedAnchorAngle = null;
 
 function setupAnchors() {
     const cx = width / 2;
@@ -484,6 +485,7 @@ function resetFractalState() {
     activeAnchor = null;
     activeNote = null;
     activeColor = null;
+    lastPlayedAnchorAngle = null;
     iterCountEl.innerText = '0';
     currentNoteEl.innerText = '-';
     currentNoteEl.style.color = '#ffffff';
@@ -750,56 +752,6 @@ zoomInBtn.addEventListener('click', () => applyZoom(1.5));
 zoomOutBtn.addEventListener('click', () => applyZoom(1 / 1.5));
 
 // --- Rendering ---
-function drawRotationArrows(cx, cy, radius, alpha, color = '#ffffff') {
-    if (alpha < 0.01) return;
-    const r = radius + 16 / transform.scale;
-    const arcSpan = 0.5;
-    const s = 7 / transform.scale;
-
-    ctx.strokeStyle = hexToRGBA(color, alpha);
-    ctx.fillStyle = hexToRGBA(color, alpha);
-    ctx.lineWidth = 1.5 / transform.scale;
-    ctx.setLineDash([]);
-
-    // CW arc — top-right area
-    const cwS = -Math.PI / 2 + 0.28;
-    const cwE = cwS + arcSpan;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, cwS, cwE);
-    ctx.stroke();
-    const ex1 = cx + Math.cos(cwE) * r;
-    const ey1 = cy + Math.sin(cwE) * r;
-    const tx1 = Math.cos(cwE + Math.PI / 2);
-    const ty1 = Math.sin(cwE + Math.PI / 2);
-    const nx1 = Math.cos(cwE);
-    const ny1 = Math.sin(cwE);
-    ctx.beginPath();
-    ctx.moveTo(ex1 + tx1 * s, ey1 + ty1 * s);
-    ctx.lineTo(ex1 - tx1 * s * 0.4 + nx1 * s * 0.6, ey1 - ty1 * s * 0.4 + ny1 * s * 0.6);
-    ctx.lineTo(ex1 - tx1 * s * 0.4 - nx1 * s * 0.6, ey1 - ty1 * s * 0.4 - ny1 * s * 0.6);
-    ctx.closePath();
-    ctx.fill();
-
-    // CCW arc — bottom-left area
-    const ccwE = Math.PI / 2 + 0.28;
-    const ccwS = ccwE + arcSpan;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, ccwS, ccwE, true);
-    ctx.stroke();
-    const ex2 = cx + Math.cos(ccwE) * r;
-    const ey2 = cy + Math.sin(ccwE) * r;
-    const tx2 = Math.cos(ccwE - Math.PI / 2);
-    const ty2 = Math.sin(ccwE - Math.PI / 2);
-    const nx2 = Math.cos(ccwE);
-    const ny2 = Math.sin(ccwE);
-    ctx.beginPath();
-    ctx.moveTo(ex2 + tx2 * s, ey2 + ty2 * s);
-    ctx.lineTo(ex2 - tx2 * s * 0.4 + nx2 * s * 0.6, ey2 - ty2 * s * 0.4 + ny2 * s * 0.6);
-    ctx.lineTo(ex2 - tx2 * s * 0.4 - nx2 * s * 0.6, ey2 - ty2 * s * 0.4 - ny2 * s * 0.6);
-    ctx.closePath();
-    ctx.fill();
-}
-
 function redrawCanvas() {
     if (!width || !height) return;
 
@@ -820,15 +772,20 @@ function redrawCanvas() {
     const cy = height / 2;
     const radius = Math.min(cx, cy) * 0.8;
 
-    const circleAlpha = isRotating ? 0.55 : (isHoveringCircle ? 0.42 : 0.22);
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = hexToRGBA(lastPlayedColor, circleAlpha);
+    ctx.strokeStyle = `rgba(255,255,255,${isHoveringCircle ? 0.35 : 0.2})`;
     ctx.lineWidth = (isHoveringCircle || isRotating ? 1.5 : 1) / transform.scale;
     ctx.stroke();
 
-    const arrowAlpha = isRotating ? 0.9 : (isHoveringCircle ? 0.65 : 0.18);
-    drawRotationArrows(cx, cy, radius, arrowAlpha, lastPlayedColor);
+    if (lastPlayedAnchorAngle !== null) {
+        const arcSpan = 0.26;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, lastPlayedAnchorAngle - arcSpan, lastPlayedAnchorAngle + arcSpan);
+        ctx.strokeStyle = hexToRGBA(lastPlayedColor, 0.85);
+        ctx.lineWidth = 2.5 / transform.scale;
+        ctx.stroke();
+    }
 
     ctx.font = `${20 / transform.scale}px monospace`;
     ctx.textAlign = 'center';
@@ -966,6 +923,7 @@ function commitActiveStep(timestamp) {
 
     addFractalPoint(activeColor, timestamp);
     lastPlayedColor = activeAnchor.color;
+    lastPlayedAnchorAngle = Math.atan2(activeAnchor.y - height / 2, activeAnchor.x - width / 2);
     playNote(activeNote.freq);
     currentNoteEl.innerText = activeNote.name;
     currentNoteEl.style.color = activeColor;
@@ -1042,6 +1000,7 @@ function iterate(timestamp) {
                 addFractalPoint(color, frameTime);
                 notesThisFrame.set(anchor.noteIndex, { note, color });
                 lastPlayedColor = anchor.color;
+                lastPlayedAnchorAngle = Math.atan2(anchor.y - height / 2, anchor.x - width / 2);
                 lastNote = note;
                 lastColor = color;
                 iteration++;
