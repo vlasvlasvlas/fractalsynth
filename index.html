@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,7 +10,7 @@
     
     <!-- PANTALLA DE INICIO -->
     <div id="home-view">
-        <button id="enterPyramidBtn" class="pyramid-btn">
+        <button id="enterPyramidBtn" class="pyramid-btn" aria-label="Entrar a Fractal Synth">
             <svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                 <!-- Pirámide cruda -->
                 <polygon points="50,10 10,90 90,90" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="miter" />
@@ -26,20 +26,20 @@
         
         <!-- BARRA SUPERIOR / FLOTANTE -->
         <div id="top-bar">
-            <button id="navBackBtn" title="Back to Menu">[ < ]</button>
-            <button id="navHelpBtn" title="Help">[ ? ]</button>
-            <button id="navSettingsBtn" title="Toggle Settings">[ ⚙ ]</button>
+            <button id="navBackBtn" title="Volver al menu" aria-label="Volver al menu">[ < ]</button>
+            <button id="navHelpBtn" title="Ayuda" aria-label="Abrir ayuda">[ ? ]</button>
+            <button id="navSettingsBtn" title="Mostrar u ocultar ajustes" aria-label="Mostrar u ocultar ajustes">[ ⚙ ]</button>
         </div>
 
         <!-- MODAL DE AYUDA -->
-        <div id="help-modal" style="display: none;">
+        <div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" aria-hidden="true" style="display: none;">
             <div class="modal-content">
-                <h2>--- SYSTEM MANUAL ---</h2>
-                <p><strong>THE CHAOS GAME:</strong> Este generador está basado en el <a href="https://en.wikipedia.org/wiki/Chaos_game" target="_blank" style="color:#ffffff;">Juego del Caos</a>. El algoritmo toma 3 puntos fijos (anclas armónicas). Partiendo de un punto inicial aleatorio, elige un ancla al azar, dibuja un nuevo punto exactamente en el medio, y repite el proceso infinitamente usando el nuevo punto como origen. Esto genera el fractal conocido como <a href="https://es.wikipedia.org/wiki/Tri%C3%A1ngulo_de_Sierpinski" target="_blank" style="color:#ffffff;">Triángulo de Sierpinski</a>.</p>
-                <p><strong>SPEED:</strong> Controla la velocidad. Valores de 1-50 muestran el algoritmo paso a paso (modo educativo). Valores mayores a 50 inyectan múltiples puntos por fotograma para construir el fractal masivo.</p>
+                <h2 id="helpTitle">--- SYSTEM MANUAL ---</h2>
+                <p><strong>THE CHAOS GAME:</strong> Este generador está basado en el <a href="https://en.wikipedia.org/wiki/Chaos_game" target="_blank" rel="noopener noreferrer" style="color:#ffffff;">Juego del Caos</a>. El algoritmo toma 3 puntos fijos (anclas armónicas). Partiendo de un punto inicial aleatorio, elige un ancla al azar, dibuja un nuevo punto exactamente en el medio, y repite el proceso infinitamente usando el nuevo punto como origen. Esto genera el fractal conocido como <a href="https://es.wikipedia.org/wiki/Tri%C3%A1ngulo_de_Sierpinski" target="_blank" rel="noopener noreferrer" style="color:#ffffff;">Triángulo de Sierpinski</a>.</p>
+                <p><strong>SPEED:</strong> Controla la velocidad. Valores de 1-50 muestran el algoritmo paso a paso (modo educativo). Valores mayores a 50 inyectan hasta 50 puntos por fotograma para construir el fractal masivo.</p>
                 <p><strong>ZOOM:</strong> Usa la rueda del ratón o los botones [+]/[-]. El nivel de Zoom controla la frecuencia de corte del audio (más cerca = más agudo).</p>
                 <p><strong>BOX ZOOM:</strong> Mantén presionada la tecla SHIFT y arrastra sobre el lienzo para acercarte a un sector específico.</p>
-                <p><strong>PROYECCIÓN:</strong> Presiona el botón [ ⚙ ] para ocultar/mostrar la barra lateral.</p>
+                <p><strong>AJUSTES:</strong> Presiona el botón [ ⚙ ] para ocultar/mostrar la barra lateral.</p>
                 <button id="closeHelpBtn">[ CLOSE ]</button>
             </div>
         </div>
@@ -49,7 +49,7 @@
             <h2>Pyramid Settings</h2>
             
             <div class="control-group">
-                <label>Speed (0=Pause, 50=Step, 100=Max)</label>
+                <label for="speedSlider">Speed (0=Pause, 50=Step, 100=Max)</label>
                 <input type="range" id="speedSlider" min="0" max="100" value="10">
                 <span id="speedValue">10</span>
             </div>
@@ -60,7 +60,7 @@
             </div>
 
             <div class="control-group">
-                <label>Color Mode</label>
+                <label for="colorModeSelect">Color Mode</label>
                 <select id="colorModeSelect">
                     <option value="inherit">Inherit Anchor Color</option>
                     <option value="frequency">Map to Frequency</option>
@@ -70,13 +70,13 @@
 
             <div class="control-group">
                 <h3>Harmonies</h3>
-                <label>Anchor 1 (Top)</label>
+                <label for="anchor1Select">Anchor 1 (Top)</label>
                 <select id="anchor1Select"></select>
                 
-                <label>Anchor 2 (Left)</label>
+                <label for="anchor2Select">Anchor 2 (Left)</label>
                 <select id="anchor2Select"></select>
                 
-                <label>Anchor 3 (Right)</label>
+                <label for="anchor3Select">Anchor 3 (Right)</label>
                 <select id="anchor3Select"></select>
             </div>
 
@@ -86,28 +86,34 @@
                     Randomize Anchors
                 </label>
                 <div>
-                    Every <input type="number" id="randomInterval" min="1" max="60" value="3" style="width: 50px;"> sec
+                    <label for="randomInterval" class="inline-label">Every</label>
+                    <input type="number" id="randomInterval" min="1" max="60" value="3" style="width: 50px;"> sec
                 </div>
             </div>
 
             <div class="control-group">
                 <h3>Audio Effects</h3>
+                <label for="masterVolume">Master Volume</label>
+                <input type="range" id="masterVolume" min="0" max="1" step="0.01" value="0.8">
+
                 <!-- Delay -->
-                <label>Delay Time (s)</label>
+                <label for="delayTime">Delay Time (s)</label>
                 <input type="range" id="delayTime" min="0" max="1" step="0.01" value="0.0">
-                <label>Delay Feedback</label>
-                <input type="range" id="delayFeedback" min="0" max="0.9" step="0.01" value="0.0">
+                <label for="delayFeedback">Delay Feedback</label>
+                <input type="range" id="delayFeedback" min="0" max="0.85" step="0.01" value="0.0">
+                <label for="delayMix">Delay Mix</label>
+                <input type="range" id="delayMix" min="0" max="1" step="0.01" value="0.0">
                 
                 <!-- Tremolo (Amplitude LFO) -->
-                <label>Tremolo Rate (Hz)</label>
+                <label for="tremoloRate">Tremolo Rate (Hz)</label>
                 <input type="range" id="tremoloRate" min="0.1" max="20" step="0.1" value="5">
-                <label>Tremolo Depth</label>
+                <label for="tremoloDepth">Tremolo Depth</label>
                 <input type="range" id="tremoloDepth" min="0" max="1" step="0.01" value="0">
                 
                 <!-- Vibrato (Pitch LFO) -->
-                <label>Pitch LFO Rate (Hz)</label>
+                <label for="pitchLfoRate">Vibrato Rate (Hz)</label>
                 <input type="range" id="pitchLfoRate" min="0.1" max="20" step="0.1" value="5">
-                <label>Pitch LFO Depth (Hz)</label>
+                <label for="pitchLfoDepth">Vibrato Depth (cents)</label>
                 <input type="range" id="pitchLfoDepth" min="0" max="100" step="1" value="0">
             </div>
 
@@ -119,11 +125,14 @@
             <button id="resetViewBtn">Reset View & Clear</button>
         </aside>
 
-        <canvas id="fractalCanvas"></canvas>
+        <canvas id="fractalCanvas" role="img" tabindex="0" aria-label="Visualizacion del Juego del Caos y sus anclas armonicas">
+            Visualizacion generativa del Juego del Caos.
+        </canvas>
+        <div id="selection-box" aria-hidden="true"></div>
         
         <div id="zoom-controls">
-            <button id="zoomInBtn">+</button>
-            <button id="zoomOutBtn">-</button>
+            <button id="zoomInBtn" aria-label="Acercar">+</button>
+            <button id="zoomOutBtn" aria-label="Alejar">-</button>
         </div>
     </div>
 

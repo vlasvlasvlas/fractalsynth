@@ -12,8 +12,10 @@ body, html {
 /* --- HOME VIEW --- */
 #home-view {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
+    gap: 20px;
     width: 100vw;
     height: 100vh;
     background-color: #000000;
@@ -83,6 +85,9 @@ body, html {
     border: 2px outset #ffffff;
     padding: 20px;
     max-width: 600px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    box-sizing: border-box;
     color: #cccccc;
     line-height: 1.5;
 }
@@ -163,6 +168,10 @@ select, input[type="number"] {
     font-family: monospace;
 }
 
+.inline-label {
+    display: inline;
+}
+
 input[type="range"] {
     width: 100%;
 }
@@ -234,4 +243,38 @@ button.danger:active {
     display: none;
     pointer-events: none;
     z-index: 15;
+}
+
+@media (max-width: 600px) {
+    .pyramid-btn svg {
+        width: 160px;
+        height: 160px;
+    }
+
+    #top-bar {
+        top: 10px;
+        right: 10px;
+        gap: 6px;
+    }
+
+    #top-bar button {
+        font-size: 14px;
+        padding: 4px 8px;
+    }
+
+    #sidebar {
+        width: min(320px, 100vw);
+        padding-top: 58px;
+    }
+
+    .modal-content {
+        width: calc(100vw - 24px);
+        max-height: calc(100vh - 24px);
+        padding: 14px;
+    }
+
+    #zoom-controls {
+        bottom: 12px;
+        right: 12px;
+    }
 }
