@@ -148,3 +148,6 @@ python3 -m http.server 8080
 ```
 
 Abrir `http://localhost:8080` en el navegador.
+## License
+
+MIT License — © 2026 [Vladimiro Bellini](https://github.com/vlasvlasvlas). Free to use and modify, attribution required.
