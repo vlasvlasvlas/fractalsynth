@@ -106,6 +106,7 @@ Estructura YAML equivalente (solo como referencia documental, el archivo usa JS)
 - **Reverb**: tamaño e intensidad. Implementado con reflexiones tempranas estereo.
 - **Vibrato**: rate (Hz) y depth (cents) del LFO de pitch.
 - El zoom modifica el filtro de audio: mas zoom = frecuencia de corte mas alta.
+- La salida final de audio se fuerza a mono antes del limiter y del destino.
 
 ## Controles
 

@@ -121,7 +121,7 @@ let audioCtx;
 let masterFilter;
 let delayNode, delayFeedbackNode, delaySendGain, delayWetGain;
 let reverbNode, reverbToneNode, reverbSendGain, reverbWetGain;
-let dryGain, outputGain, limiterNode;
+let dryGain, outputGain, monoOutputNode, limiterNode;
 let pitchLFO, pitchDepthNode;
 let audioVoices = [];
 let nextVoiceIndex = 0;
@@ -146,7 +146,13 @@ function readNumber(element, fallback, min, max) {
 function setAudioParam(param, value, smoothing = PARAM_SMOOTHING) {
     if (!audioCtx || !param) return;
     const now = audioCtx.currentTime;
-    param.cancelScheduledValues(now);
+    if (typeof param.cancelAndHoldAtTime === 'function') {
+        param.cancelAndHoldAtTime(now);
+    } else {
+        const heldValue = param.value;
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(heldValue, now);
+    }
     param.setTargetAtTime(value, now, smoothing);
 }
 
@@ -341,6 +347,11 @@ function initAudio() {
         outputGain = audioCtx.createGain();
         outputGain.gain.value = readNumber(masterVolumeEl, 0.8, 0, 1);
 
+        monoOutputNode = audioCtx.createGain();
+        monoOutputNode.channelCount = 1;
+        monoOutputNode.channelCountMode = 'explicit';
+        monoOutputNode.channelInterpretation = 'speakers';
+
         limiterNode = audioCtx.createDynamicsCompressor();
         limiterNode.threshold.value = -10;
         limiterNode.knee.value = 0;
@@ -372,7 +383,8 @@ function initAudio() {
         reverbToneNode.connect(reverbWetGain);
         reverbWetGain.connect(outputGain);
 
-        outputGain.connect(limiterNode);
+        outputGain.connect(monoOutputNode);
+        monoOutputNode.connect(limiterNode);
         limiterNode.connect(audioCtx.destination);
 
         updateDelayMix();
@@ -405,6 +417,7 @@ function shutdownAudio({ immediate = false } = {}) {
     reverbWetGain = null;
     dryGain = null;
     outputGain = null;
+    monoOutputNode = null;
     limiterNode = null;
     pitchLFO = null;
     pitchDepthNode = null;
